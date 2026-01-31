@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scripture Play Maker</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Scripture Play Maker</h1>
+    </header>
+
+    <main id="main-content">
+      <section class="input-section" id="input-section">
+        <div class="panel students-panel">
+          <h2>Select Students</h2>
+          <div class="button-group">
+            <button type="button" id="select-all">Select All</button>
+            <button type="button" id="clear-all">Clear All</button>
+          </div>
+          <div class="student-list" id="student-list">
+            <!-- Students populated by JS -->
+          </div>
+          <div class="add-visitor">
+            <input type="text" id="visitor-name" placeholder="Add visiting student...">
+            <button type="button" id="add-visitor">Add</button>
+          </div>
+        </div>
+
+        <div class="panel scripture-panel">
+          <h2>Scripture</h2>
+          <input type="text" id="scripture-title" placeholder="Title/Reference (e.g., 'The Good Samaritan - Luke 10:25-37')">
+          <textarea id="scripture-text" placeholder="Paste the scripture text here..."></textarea>
+          <div class="options-row">
+            <div class="option-group">
+              <label for="duration">Duration:</label>
+              <select id="duration">
+                <option value="5">5 min</option>
+                <option value="10">10 min</option>
+                <option value="15">15 min</option>
+                <option value="20" selected>20 min</option>
+              </select>
+            </div>
+            <div class="option-group">
+              <label for="model">Model:</label>
+              <select id="model">
+                <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+                <option value="claude-opus-4-5-20251101">Claude Opus 4.5</option>
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-5.2-2025-12-11">GPT-5.2</option>
+              </select>
+            </div>
+          </div>
+          <button type="button" id="generate-btn" class="generate-btn">Generate Play</button>
+        </div>
+      </section>
+
+      <section class="output-section" id="output-section" style="display: none;">
+        <div class="output-controls">
+          <button type="button" id="back-btn">Back</button>
+          <button type="button" id="download-btn">Save Script</button>
+          <button type="button" id="fullscreen-btn">Present</button>
+        </div>
+        <div class="play-display" id="play-display">
+          <!-- Generated play appears here -->
+        </div>
+      </section>
+    </main>
+
+    <div class="loading" id="loading" style="display: none;">
+      <div class="spinner"></div>
+      <p id="loading-status">Generating your play...</p>
+      <p id="loading-time" class="loading-time">Elapsed: 0:00</p>
+      <p class="loading-note">Opus can take 2-3 minutes for longer plays</p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
