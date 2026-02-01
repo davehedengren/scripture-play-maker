@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 5000;
 
 const anthropic = new Anthropic({
   timeout: 5 * 60 * 1000, // 5 minutes
@@ -176,6 +176,6 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Scripture Play Maker running at http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Scripture Play Maker running at http://0.0.0.0:${PORT}`);
 });
