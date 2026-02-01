@@ -1,10 +1,9 @@
 // Default student list
 const DEFAULT_STUDENTS = [
-  'Adrian H', 'Alex R', 'Andreas P', 'Bella F', 'Bennett B', 'Blake B',
-  'Cade B', 'Charles G', 'Cooper A', 'Ellie S', 'Emelia S', 'Emma H',
-  'Jacob F', 'Joel R', 'Katelyn S', 'Laila H', 'Lila R', 'Macy H',
-  'McKay S', 'Naomi S', 'Nico C', 'Nolan B', 'Olin H', 'Olivia P',
-  'Rebekah M', 'Ryder B', 'Ryder D', 'Sam P', 'Spencer C', 'Trent W'
+  'Adrian H', 'Alex R', 'Andreas P', 'Bella F', 'Blake B', 'Charles G',
+  'Cooper A', 'Ellie S', 'Emelia S', 'Emma H', 'Jacob F', 'Joel R',
+  'Katelyn S', 'Lila R', 'Macy H', 'McKay S', 'Naomi S', 'Nico C',
+  'Olin H', 'Olivia P', 'Rebekah M', 'Ryder D', 'Sam P', 'Spencer C', 'Trent W'
 ];
 
 let students = [...DEFAULT_STUDENTS];
