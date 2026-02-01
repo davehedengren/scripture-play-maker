@@ -92,11 +92,22 @@ app.post('/api/generate', async (req, res) => {
     const listOfNames = students.join(', ');
     const selectedGenre = 'adventure';
     const playDuration = duration || '20';
+    const studentCount = students.length;
+
+    // Dynamic casting instruction based on student count
+    let castingInstruction = '';
+    if (studentCount >= 20) {
+      castingInstruction = `\n\nIMPORTANT: You have ${studentCount} actors to cast. Create additional characters beyond the main scripture story - add townspeople, animals, a Greek chorus, angels, comedic sidekicks, or split narrator duties among multiple people. Be creative to ensure everyone gets a meaningful part with lines.`;
+    } else if (studentCount >= 15) {
+      castingInstruction = `\n\nNote: You have ${studentCount} actors. Feel free to add extra characters like townspeople, messengers, or a narrator team to give everyone a part.`;
+    } else if (studentCount >= 10) {
+      castingInstruction = `\n\nNote: Make sure all ${studentCount} actors get a part, adding minor characters if needed.`;
+    }
 
     // Using the proven prompt format
     const userPrompt = `Write a ${playDuration} minute play about a story from the LDS scripture. The actors will be reading the play while seated. All action will need to be described by a narrator or in the characters dialogue.
 
-Choose characters from the story and assign them to actors. The narrator will also be assigned from the list of actors. No name will be assigned to more than one part. The list of actors is: ${listOfNames}${priorityNote}
+Choose characters from the story and assign them to actors. The narrator will also be assigned from the list of actors. No name will be assigned to more than one part. The list of actors is: ${listOfNames}${priorityNote}${castingInstruction}
 
 The story is from ${title || 'the following scripture passage'}: ${scripture}
 
