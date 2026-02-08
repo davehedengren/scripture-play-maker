@@ -12,6 +12,11 @@
       <h1>Scripture Play Maker</h1>
     </header>
 
+    <nav class="tab-nav" id="tab-nav">
+      <button class="tab-btn active" data-tab="create">Create New</button>
+      <button class="tab-btn" data-tab="history">Past Scripts</button>
+    </nav>
+
     <main id="main-content">
       <section class="input-section" id="input-section">
         <div class="panel students-panel">
@@ -66,6 +71,23 @@
         <div class="play-display" id="play-display">
           <!-- Generated play appears here -->
         </div>
+      </section>
+
+      <section class="history-section" id="history-section" style="display: none;">
+        <div class="panel">
+          <div class="history-list" id="history-list">
+            <p class="history-empty">No scripts yet. Generate your first play to see it here.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="output-section" id="history-view-section" style="display: none;">
+        <div class="output-controls">
+          <button type="button" id="history-back-btn">Back to History</button>
+          <button type="button" id="history-download-btn">Save Script</button>
+          <button type="button" id="history-fullscreen-btn">Present</button>
+        </div>
+        <div class="play-display" id="history-play-display"></div>
       </section>
     </main>
 

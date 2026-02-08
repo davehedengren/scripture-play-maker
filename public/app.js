@@ -30,9 +30,28 @@ const loading = document.getElementById('loading');
 const loadingStatus = document.getElementById('loading-status');
 const loadingTime = document.getElementById('loading-time');
 
+const historySection = document.getElementById('history-section');
+const historyList = document.getElementById('history-list');
+const historyViewSection = document.getElementById('history-view-section');
+const historyPlayDisplay = document.getElementById('history-play-display');
+const historyBackBtn = document.getElementById('history-back-btn');
+const historyDownloadBtn = document.getElementById('history-download-btn');
+const historyFullscreenBtn = document.getElementById('history-fullscreen-btn');
+const tabNav = document.getElementById('tab-nav');
+const tabBtns = tabNav.querySelectorAll('.tab-btn');
+
 let timerInterval = null;
 let currentMarkdown = '';
 let currentTitle = '';
+let currentTab = 'create';
+let viewingHistoryMarkdown = '';
+let viewingHistoryTitle = '';
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
 
 // Initialize
 function init() {
@@ -87,6 +106,38 @@ function setupEventListeners() {
   backBtn.addEventListener('click', showInput);
   downloadBtn.addEventListener('click', downloadScript);
   fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+  tabBtns.forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  historyBackBtn.addEventListener('click', () => {
+    historyViewSection.style.display = 'none';
+    historySection.style.display = 'block';
+    document.body.classList.remove('fullscreen');
+    historyFullscreenBtn.textContent = 'Present';
+  });
+
+  historyDownloadBtn.addEventListener('click', () => {
+    if (!viewingHistoryMarkdown) return;
+    const filename = viewingHistoryTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.md';
+    const blob = new Blob([viewingHistoryMarkdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  historyFullscreenBtn.addEventListener('click', () => {
+    document.body.classList.toggle('fullscreen');
+    historyFullscreenBtn.textContent = document.body.classList.contains('fullscreen')
+      ? 'Exit Fullscreen'
+      : 'Present';
+  });
 
   // Save state on changes
   studentList.addEventListener('change', saveState);
@@ -274,6 +325,105 @@ function loadSavedState() {
     }
   } catch (e) {
     console.error('Failed to load saved state:', e);
+  }
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  tabBtns.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+
+  inputSection.style.display = 'none';
+  outputSection.style.display = 'none';
+  historySection.style.display = 'none';
+  historyViewSection.style.display = 'none';
+  document.body.classList.remove('fullscreen');
+
+  if (tab === 'create') {
+    inputSection.style.display = 'grid';
+  } else if (tab === 'history') {
+    historySection.style.display = 'block';
+    loadScriptHistory();
+  }
+}
+
+async function loadScriptHistory() {
+  try {
+    const response = await fetch('/api/scripts');
+    const scripts = await response.json();
+
+    if (scripts.length === 0) {
+      historyList.innerHTML = '<p class="history-empty">No scripts yet. Generate your first play to see it here.</p>';
+      return;
+    }
+
+    historyList.innerHTML = scripts.map(script => {
+      const date = new Date(script.date);
+      const dateStr = date.toLocaleDateString('en-US', {
+        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
+      });
+      const timeStr = date.toLocaleTimeString('en-US', {
+        hour: 'numeric', minute: '2-digit'
+      });
+      const studentCount = script.students ? script.students.length : 0;
+      const safeId = escapeHtml(script.id);
+      const safeTitle = escapeHtml(script.title);
+
+      return `
+        <div class="history-card" data-id="${safeId}">
+          <div class="history-card-content" data-script-id="${safeId}">
+            <h3>${safeTitle}</h3>
+            <div class="history-meta">
+              <span>${dateStr} at ${timeStr}</span>
+              <span>${escapeHtml(String(script.duration))} min</span>
+              <span>${studentCount} students</span>
+            </div>
+          </div>
+          <button class="history-delete-btn" data-delete-id="${safeId}" title="Delete script">&#x2715;</button>
+        </div>
+      `;
+    }).join('');
+
+    historyList.querySelectorAll('.history-card-content').forEach(el => {
+      el.addEventListener('click', () => viewScript(el.dataset.scriptId));
+    });
+    historyList.querySelectorAll('.history-delete-btn').forEach(el => {
+      el.addEventListener('click', (e) => deleteScript(el.dataset.deleteId, e));
+    });
+  } catch (error) {
+    historyList.innerHTML = '<p class="history-empty">Failed to load script history.</p>';
+  }
+}
+
+async function viewScript(id) {
+  try {
+    const response = await fetch(`/api/scripts/${id}`);
+    const script = await response.json();
+
+    viewingHistoryMarkdown = script.markdown;
+    viewingHistoryTitle = script.title;
+    historyPlayDisplay.innerHTML = script.html;
+
+    historySection.style.display = 'none';
+    historyViewSection.style.display = 'block';
+  } catch (error) {
+    alert('Failed to load script');
+  }
+}
+
+async function deleteScript(id, event) {
+  event.stopPropagation();
+  if (!confirm('Delete this script? This cannot be undone.')) return;
+
+  try {
+    const response = await fetch(`/api/scripts/${id}`, { method: 'DELETE' });
+    if (!response.ok) {
+      throw new Error('Delete failed');
+    }
+    loadScriptHistory();
+  } catch (error) {
+    alert('Failed to delete script');
   }
 }
 

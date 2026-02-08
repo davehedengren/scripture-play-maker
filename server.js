@@ -24,7 +24,9 @@ const openai = new OpenAI({
 });
 
 const ROLE_HISTORY_PATH = path.join(__dirname, 'data', 'role-history.json');
+const SCRIPT_HISTORY_PATH = path.join(__dirname, 'data', 'script-history.json');
 const MAX_HISTORY_ENTRIES = 10;
+const MAX_SCRIPT_ENTRIES = 50;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -41,6 +43,20 @@ async function loadRoleHistory() {
 async function saveRoleHistory(history) {
   await fs.mkdir(path.dirname(ROLE_HISTORY_PATH), { recursive: true });
   await fs.writeFile(ROLE_HISTORY_PATH, JSON.stringify(history, null, 2));
+}
+
+async function loadScriptHistory() {
+  try {
+    const data = await fs.readFile(SCRIPT_HISTORY_PATH, 'utf-8');
+    return JSON.parse(data);
+  } catch {
+    return [];
+  }
+}
+
+async function saveScriptHistory(history) {
+  await fs.mkdir(path.dirname(SCRIPT_HISTORY_PATH), { recursive: true });
+  await fs.writeFile(SCRIPT_HISTORY_PATH, JSON.stringify(history, null, 2));
 }
 
 function analyzeRoleHistory(history, students) {
@@ -67,6 +83,43 @@ app.get('/api/role-history', async (req, res) => {
     res.json(history);
   } catch (error) {
     res.status(500).json({ error: 'Failed to load role history' });
+  }
+});
+
+app.get('/api/scripts', async (req, res) => {
+  try {
+    const scripts = await loadScriptHistory();
+    const summaries = scripts.map(({ markdown, ...rest }) => rest);
+    res.json(summaries);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load script history' });
+  }
+});
+
+app.get('/api/scripts/:id', async (req, res) => {
+  try {
+    const scripts = await loadScriptHistory();
+    const script = scripts.find(s => s.id === req.params.id);
+    if (!script) {
+      return res.status(404).json({ error: 'Script not found' });
+    }
+    res.json(script);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load script' });
+  }
+});
+
+app.delete('/api/scripts/:id', async (req, res) => {
+  try {
+    const scripts = await loadScriptHistory();
+    const filtered = scripts.filter(s => s.id !== req.params.id);
+    if (filtered.length === scripts.length) {
+      return res.status(404).json({ error: 'Script not found' });
+    }
+    await saveScriptHistory(filtered);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete script' });
   }
 });
 
@@ -164,7 +217,28 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
     }
     await saveRoleHistory(history);
 
+    const scriptId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    const scriptEntry = {
+      id: scriptId,
+      date: new Date().toISOString(),
+      title: title || 'Untitled',
+      duration: playDuration,
+      model: selectedModel,
+      students: students,
+      casting,
+      markdown: playText,
+      html: playHtml
+    };
+
+    const scriptHistory = await loadScriptHistory();
+    scriptHistory.unshift(scriptEntry);
+    if (scriptHistory.length > MAX_SCRIPT_ENTRIES) {
+      scriptHistory.length = MAX_SCRIPT_ENTRIES;
+    }
+    await saveScriptHistory(scriptHistory);
+
     res.json({
+      id: scriptId,
       markdown: playText,
       html: playHtml,
       casting
