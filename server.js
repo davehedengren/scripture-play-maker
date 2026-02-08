@@ -109,7 +109,7 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
     const systemPrompt = `You are a youth minister who worked as a professional improv comedian for 7 years. Your job is to write funny, cheesy retellings of scriptures from the Church of Jesus Christ of Latter-day Saints that engage teenagers and help teach them the gospel. You have a gift for making ancient stories hilarious and relatable while preserving their spiritual meaning. Use humor, anachronisms, pop culture references, and witty dialogue to keep teens laughing and engaged.`;
 
     let playText;
-    const selectedModel = model || 'claude-sonnet-4-5-20250929';
+    const selectedModel = model || 'claude-opus-4-6';
 
     if (selectedModel.startsWith('gpt')) {
       // OpenAI
