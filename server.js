@@ -6,6 +6,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import pg from 'pg';
 
 dotenv.config();
 
@@ -16,20 +17,44 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 const anthropic = new Anthropic({
-  timeout: 5 * 60 * 1000, // 5 minutes
+  timeout: 5 * 60 * 1000,
 });
 
 const openai = new OpenAI({
-  timeout: 5 * 60 * 1000, // 5 minutes
+  timeout: 5 * 60 * 1000,
+});
+
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: false,
 });
 
 const ROLE_HISTORY_PATH = path.join(__dirname, 'data', 'role-history.json');
-const SCRIPT_HISTORY_PATH = path.join(__dirname, 'data', 'script-history.json');
 const MAX_HISTORY_ENTRIES = 10;
-const MAX_SCRIPT_ENTRIES = 50;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+async function initDatabase() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS scripts (
+        id TEXT PRIMARY KEY,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        title TEXT NOT NULL,
+        duration TEXT,
+        model TEXT,
+        students JSONB,
+        casting JSONB,
+        markdown TEXT,
+        html TEXT
+      )
+    `);
+  } finally {
+    client.release();
+  }
+}
 
 async function loadRoleHistory() {
   try {
@@ -43,20 +68,6 @@ async function loadRoleHistory() {
 async function saveRoleHistory(history) {
   await fs.mkdir(path.dirname(ROLE_HISTORY_PATH), { recursive: true });
   await fs.writeFile(ROLE_HISTORY_PATH, JSON.stringify(history, null, 2));
-}
-
-async function loadScriptHistory() {
-  try {
-    const data = await fs.readFile(SCRIPT_HISTORY_PATH, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return [];
-  }
-}
-
-async function saveScriptHistory(history) {
-  await fs.mkdir(path.dirname(SCRIPT_HISTORY_PATH), { recursive: true });
-  await fs.writeFile(SCRIPT_HISTORY_PATH, JSON.stringify(history, null, 2));
 }
 
 function analyzeRoleHistory(history, students) {
@@ -88,37 +99,41 @@ app.get('/api/role-history', async (req, res) => {
 
 app.get('/api/scripts', async (req, res) => {
   try {
-    const scripts = await loadScriptHistory();
-    const summaries = scripts.map(({ markdown, ...rest }) => rest);
-    res.json(summaries);
+    const result = await pool.query(
+      'SELECT id, created_at as date, title, duration, model, students, casting FROM scripts ORDER BY created_at DESC LIMIT 50'
+    );
+    res.json(result.rows);
   } catch (error) {
+    console.error('Error loading scripts:', error);
     res.status(500).json({ error: 'Failed to load script history' });
   }
 });
 
 app.get('/api/scripts/:id', async (req, res) => {
   try {
-    const scripts = await loadScriptHistory();
-    const script = scripts.find(s => s.id === req.params.id);
-    if (!script) {
+    const result = await pool.query(
+      'SELECT id, created_at as date, title, duration, model, students, casting, markdown, html FROM scripts WHERE id = $1',
+      [req.params.id]
+    );
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Script not found' });
     }
-    res.json(script);
+    res.json(result.rows[0]);
   } catch (error) {
+    console.error('Error loading script:', error);
     res.status(500).json({ error: 'Failed to load script' });
   }
 });
 
 app.delete('/api/scripts/:id', async (req, res) => {
   try {
-    const scripts = await loadScriptHistory();
-    const filtered = scripts.filter(s => s.id !== req.params.id);
-    if (filtered.length === scripts.length) {
+    const result = await pool.query('DELETE FROM scripts WHERE id = $1', [req.params.id]);
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Script not found' });
     }
-    await saveScriptHistory(filtered);
     res.json({ success: true });
   } catch (error) {
+    console.error('Error deleting script:', error);
     res.status(500).json({ error: 'Failed to delete script' });
   }
 });
@@ -146,7 +161,6 @@ app.post('/api/generate', async (req, res) => {
     const selectedGenre = 'adventure';
     const playDuration = duration || '20';
 
-    // Using the proven prompt format
     const userPrompt = `Write a ${playDuration} minute play about a story from the LDS scripture. The actors will be reading the play while seated. All action will need to be described by a narrator or in the characters dialogue.
 
 Choose characters from the story and assign them to actors. The narrator will also be assigned from the list of actors. No name will be assigned to more than one part. The list of actors is: ${listOfNames}${priorityNote}
@@ -165,7 +179,6 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
     const selectedModel = model || 'claude-opus-4-6';
 
     if (selectedModel.startsWith('gpt')) {
-      // OpenAI
       const response = await openai.chat.completions.create({
         model: selectedModel,
         max_tokens: 8000,
@@ -176,7 +189,6 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
       });
       playText = response.choices[0].message.content;
     } else {
-      // Anthropic
       const response = await anthropic.messages.create({
         model: selectedModel,
         max_tokens: 8000,
@@ -189,7 +201,6 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
     }
     const playHtml = marked(playText);
 
-    // Extract casting from the response
     const casting = {};
     const castMatch = playText.match(/CAST LIST[\s\S]*?(?=\n\n[^*]|\n\n---|\n\n#)/i);
     if (castMatch) {
@@ -204,7 +215,6 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
       }
     }
 
-    // Update role history
     const newEntry = {
       date: new Date().toISOString(),
       title: title || 'Untitled',
@@ -218,24 +228,12 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
     await saveRoleHistory(history);
 
     const scriptId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-    const scriptEntry = {
-      id: scriptId,
-      date: new Date().toISOString(),
-      title: title || 'Untitled',
-      duration: playDuration,
-      model: selectedModel,
-      students: students,
-      casting,
-      markdown: playText,
-      html: playHtml
-    };
 
-    const scriptHistory = await loadScriptHistory();
-    scriptHistory.unshift(scriptEntry);
-    if (scriptHistory.length > MAX_SCRIPT_ENTRIES) {
-      scriptHistory.length = MAX_SCRIPT_ENTRIES;
-    }
-    await saveScriptHistory(scriptHistory);
+    await pool.query(
+      `INSERT INTO scripts (id, title, duration, model, students, casting, markdown, html)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)`,
+      [scriptId, title || 'Untitled', playDuration, selectedModel, JSON.stringify(students), JSON.stringify(casting), playText, playHtml]
+    );
 
     res.json({
       id: scriptId,
@@ -250,6 +248,11 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
   }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Scripture Play Maker running at http://0.0.0.0:${PORT}`);
+initDatabase().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Scripture Play Maker running at http://0.0.0.0:${PORT}`);
+  });
+}).catch(err => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
 });
