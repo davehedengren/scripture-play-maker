@@ -149,7 +149,17 @@ app.post('/api/generate', async (req, res) => {
     return res.status(400).json({ error: 'Please provide scripture text' });
   }
 
+  // Set up streaming response
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Transfer-Encoding', 'chunked');
+  res.setHeader('Cache-Control', 'no-cache');
+
+  function sendStatus(status, detail) {
+    res.write(JSON.stringify({ type: 'status', status, detail }) + '\n');
+  }
+
   try {
+    sendStatus('preparing', 'Loading role history...');
     const history = await loadRoleHistory();
     const { prioritized } = analyzeRoleHistory(history, students);
 
@@ -161,7 +171,13 @@ app.post('/api/generate', async (req, res) => {
     const selectedGenre = 'adventure';
     const playDuration = duration || '20';
 
-    const userPrompt = `Write a ${playDuration} minute play about a story from the LDS scripture. The actors will be reading the play while seated. All action will need to be described by a narrator or in the characters dialogue.
+    const wordsPerMinute = 130;
+    const targetWordCount = parseInt(playDuration) * wordsPerMinute;
+    const maxWordCount = Math.round(targetWordCount * 1.15);
+
+    const userPrompt = `Write a ${playDuration} minute play about a story from the LDS scripture. At a reading pace of ${wordsPerMinute} words per minute, the ENTIRE play (including the playbill, stage directions, and all dialogue) must be between ${targetWordCount} and ${maxWordCount} words. This is a hard limit — do not exceed ${maxWordCount} words under any circumstances.
+
+The actors will be reading the play while seated. All action will need to be described by a narrator or in the characters dialogue.
 
 Choose characters from the story and assign them to actors. The narrator will also be assigned from the list of actors. No name will be assigned to more than one part. The list of actors is: ${listOfNames}${priorityNote}
 
@@ -171,12 +187,18 @@ The genre of the play should be: ${selectedGenre}
 
 Begin the play with a playbill showing which name will play each part. In the script place the name of each actor next to the character name.
 
-The play should not make references to coffee, tea, alcohol, or tobacco.`;
+The play should not make references to coffee, tea, alcohol, or tobacco.
 
-    const systemPrompt = `You are a youth minister who worked as a professional improv comedian for 7 years. Your job is to write funny, cheesy retellings of scriptures from the Church of Jesus Christ of Latter-day Saints that engage teenagers and help teach them the gospel. You have a gift for making ancient stories hilarious and relatable while preserving their spiritual meaning. Use humor, anachronisms, pop culture references, and witty dialogue to keep teens laughing and engaged.`;
+Remember: brevity is essential. Keep the play tight and punchy. Cut unnecessary dialogue, combine scenes where possible, and focus on the key moments of the story. The total word count MUST stay under ${maxWordCount} words.`;
+
+    const systemPrompt = `You are a youth minister who worked as a professional improv comedian for 7 years. Your job is to write funny, cheesy retellings of scriptures from the Church of Jesus Christ of Latter-day Saints that engage teenagers and help teach them the gospel. You have a gift for making ancient stories hilarious and relatable while preserving their spiritual meaning. Use humor, anachronisms, pop culture references, and witty dialogue to keep teens laughing and engaged.
+
+CRITICAL LENGTH CONSTRAINT: You must write concisely. The play must fit within the specified word count. Prioritize punchy, quick-hit humor over long monologues. Every line should earn its place — cut anything that doesn't advance the story or land a joke. Shorter scenes with sharp dialogue are better than sprawling ones.`;
 
     let playText;
     const selectedModel = model || 'claude-opus-4-6';
+
+    sendStatus('generating', `Writing play with ${selectedModel}...`);
 
     if (selectedModel.startsWith('gpt')) {
       const response = await openai.chat.completions.create({
@@ -199,6 +221,52 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
       });
       playText = response.content[0].text;
     }
+
+    let wordCount = playText.split(/\s+/).filter(w => w.length > 0).length;
+    let estimatedMinutes = Math.round(wordCount / wordsPerMinute * 10) / 10;
+    console.log(`Initial generation: ${wordCount} words, ~${estimatedMinutes} min (target: ${playDuration} min, ${targetWordCount}-${maxWordCount} words)`);
+
+    sendStatus('word_check', `Play generated: ${wordCount} words (~${estimatedMinutes} min). Target: ${targetWordCount}-${maxWordCount} words.`);
+
+    // If the play is too long, condense it with a fast model
+    if (wordCount > maxWordCount) {
+      sendStatus('condensing', `Play is ${wordCount - maxWordCount} words over limit. Condensing with Sonnet 4.6...`);
+
+      const condensePrompt = `The following play is ${wordCount} words long, but it needs to be ${targetWordCount}-${maxWordCount} words (a ${playDuration} minute play at ${wordsPerMinute} words per minute). That means you need to cut roughly ${wordCount - targetWordCount} words.
+
+Rewrite the play to fit within ${maxWordCount} words. Rules:
+- Keep the same characters, actors, and casting (do not change who plays whom)
+- Keep the playbill at the top
+- Preserve the best jokes and the key story beats
+- Cut or shorten long monologues, redundant dialogue, and unnecessary scenes
+- Combine scenes where possible
+- Keep the same tone and style
+
+Here is the play to condense:
+
+${playText}`;
+
+      const condenseResponse = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6-20250514',
+        max_tokens: 8000,
+        system: 'You are an expert script editor. Your job is to tighten plays to a target word count while preserving their humor, story, and character assignments. Return ONLY the condensed play with no commentary.',
+        messages: [
+          { role: 'user', content: condensePrompt }
+        ]
+      });
+      playText = condenseResponse.content[0].text;
+
+      wordCount = playText.split(/\s+/).filter(w => w.length > 0).length;
+      estimatedMinutes = Math.round(wordCount / wordsPerMinute * 10) / 10;
+      console.log(`After condensing: ${wordCount} words, ~${estimatedMinutes} min`);
+
+      sendStatus('condensed', `Condensed to ${wordCount} words (~${estimatedMinutes} min).`);
+    } else {
+      sendStatus('length_ok', `Word count is within target. No condensing needed.`);
+    }
+
+    sendStatus('saving', 'Saving play...');
+
     const playHtml = marked(playText);
 
     const casting = {};
@@ -235,16 +303,23 @@ The play should not make references to coffee, tea, alcohol, or tobacco.`;
       [scriptId, title || 'Untitled', playDuration, selectedModel, JSON.stringify(students), JSON.stringify(casting), playText, playHtml]
     );
 
-    res.json({
+    // Send final result
+    res.write(JSON.stringify({
+      type: 'result',
       id: scriptId,
       markdown: playText,
       html: playHtml,
-      casting
-    });
+      casting,
+      wordCount,
+      estimatedMinutes,
+      targetDuration: parseInt(playDuration)
+    }) + '\n');
+    res.end();
 
   } catch (error) {
     console.error('Error generating play:', error);
-    res.status(500).json({ error: 'Failed to generate play: ' + error.message });
+    res.write(JSON.stringify({ type: 'error', error: 'Failed to generate play: ' + error.message }) + '\n');
+    res.end();
   }
 });
 

@@ -171,24 +171,11 @@ function formatTime(seconds) {
 function startTimer() {
   let seconds = 0;
   loadingTime.textContent = `Elapsed: ${formatTime(seconds)}`;
-  loadingStatus.textContent = 'Sending request to Claude...';
+  loadingStatus.textContent = 'Sending request...';
 
   timerInterval = setInterval(() => {
     seconds++;
     loadingTime.textContent = `Elapsed: ${formatTime(seconds)}`;
-
-    // Update status messages based on time
-    if (seconds === 5) {
-      loadingStatus.textContent = 'Claude is reading the scripture...';
-    } else if (seconds === 15) {
-      loadingStatus.textContent = 'Writing the play...';
-    } else if (seconds === 45) {
-      loadingStatus.textContent = 'Still writing (this is a long one!)...';
-    } else if (seconds === 90) {
-      loadingStatus.textContent = 'Almost there...';
-    } else if (seconds === 150) {
-      loadingStatus.textContent = 'Taking longer than usual, but still working...';
-    }
   }, 1000);
 }
 
@@ -233,14 +220,48 @@ async function generatePlay() {
       })
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to generate play');
+    if (!response.ok && response.headers.get('content-type')?.includes('application/json')) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to generate play');
     }
 
-    playDisplay.innerHTML = data.html;
-    currentMarkdown = data.markdown;
+    // Read streaming response line by line
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let resultData = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          if (event.type === 'status') {
+            loadingStatus.textContent = event.detail;
+          } else if (event.type === 'error') {
+            throw new Error(event.error);
+          } else if (event.type === 'result') {
+            resultData = event;
+          }
+        } catch (e) {
+          if (e.message && !e.message.includes('JSON')) throw e;
+        }
+      }
+    }
+
+    if (!resultData) {
+      throw new Error('No result received from server');
+    }
+
+    playDisplay.innerHTML = resultData.html;
+    currentMarkdown = resultData.markdown;
     currentTitle = title || 'scripture-play';
     showOutput();
 
