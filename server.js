@@ -255,7 +255,7 @@ The story is from ${title || 'the following scripture passage'}: ${scripture}
 
 The genre of the play should be: ${selectedGenre}
 
-Begin the play with a playbill showing which name will play each part. In the script place the name of each actor next to the character name.
+Begin the play with a playbill showing which name will play each part. IMPORTANT: On EVERY line of dialogue and EVERY stage direction, always show both the character name AND the student's real name together, for example: **MOSES (Olin H):** "Let my people go!" — never write just the character name alone. The students are reading from the script and need to see their own name to know when it's their turn.
 
 The play should not make references to coffee, tea, alcohol, or tobacco.
 
