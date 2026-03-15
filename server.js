@@ -127,7 +127,9 @@ app.put('/api/students', async (req, res) => {
     if (!Array.isArray(students)) {
       return res.status(400).json({ error: 'Students must be an array' });
     }
-    const cleaned = students.map(s => s.trim()).filter(s => s.length > 0);
+    const cleaned = students
+      .map(s => typeof s === 'string' ? { name: s.trim(), gender: 'M' } : { name: (s.name || '').trim(), gender: s.gender || 'M' })
+      .filter(s => s.name.length > 0);
     await saveStudents(cleaned);
     res.json(cleaned);
   } catch (error) {
@@ -205,11 +207,32 @@ app.post('/api/generate', async (req, res) => {
     const history = await loadRoleHistory();
     const { prioritized } = analyzeRoleHistory(history, students);
 
-    const priorityNote = prioritized.length > 0
-      ? ` Prioritize giving roles to these students who haven't had roles recently: ${prioritized.join(', ')}.`
-      : '';
+    // Build gender lookup from stored student data
+    const storedStudents = await loadStudents();
+    const genderMap = {};
+    storedStudents.forEach(s => {
+      if (typeof s === 'object') genderMap[s.name] = s.gender;
+    });
 
-    const listOfNames = students.join(', ');
+    // Shuffle students randomly using Fisher-Yates, with prioritized students first
+    const shuffled = [...students];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    // Move prioritized students to the front so they get roles first
+    if (prioritized.length > 0) {
+      const prioritySet = new Set(prioritized);
+      const front = shuffled.filter(s => prioritySet.has(s));
+      const rest = shuffled.filter(s => !prioritySet.has(s));
+      shuffled.length = 0;
+      shuffled.push(...front, ...rest);
+    }
+
+    const numberedNames = shuffled.map((name, i) => {
+      const gender = genderMap[name] || 'M';
+      return `${i + 1}. ${name} (${gender})`;
+    }).join('\n');
     const selectedGenre = 'adventure';
     const playDuration = duration || '20';
 
@@ -221,7 +244,12 @@ app.post('/api/generate', async (req, res) => {
 
 The actors will be reading the play while seated. All action will need to be described by a narrator or in the characters dialogue.
 
-Choose characters from the story and assign them to actors. The narrator will also be assigned from the list of actors. No name will be assigned to more than one part. The list of actors is: ${listOfNames}${priorityNote}
+Assign characters to actors in the numbered order below. Each actor is marked (M) for male or (F) for female. Follow these casting rules:
+- For female characters: ONLY assign an actor marked (F). If the next actor in the list is (M), skip them and use the next (F) actor.
+- For male or gender-neutral characters (narrator, townspeople, animals, angels, messengers, etc.): assign any actor, regardless of (M) or (F).
+- Every actor must get exactly one role. No actor may be skipped entirely — if you run out of gendered roles, create additional gender-neutral parts (extra townspeople, messengers, chorus members, etc.) so everyone is included.
+
+${numberedNames}
 
 The story is from ${title || 'the following scripture passage'}: ${scripture}
 

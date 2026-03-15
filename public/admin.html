@@ -62,6 +62,16 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
     }
+    .student-row select {
+      padding: 12px 8px;
+      border: 1px solid var(--mid-gray);
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-family: inherit;
+      background: var(--white);
+      cursor: pointer;
+      width: 52px;
+    }
     .remove-btn {
       padding: 10px 14px;
       background: var(--light-gray);
@@ -188,18 +198,30 @@
 
     function renderRows(students) {
       studentRows.innerHTML = '';
-      students.forEach((name, i) => addRow(name));
+      students.forEach(s => {
+        // Support old string format and new object format
+        if (typeof s === 'string') {
+          addRow(s, 'M');
+        } else {
+          addRow(s.name, s.gender || 'M');
+        }
+      });
       updateCount();
     }
 
-    function addRow(value = '') {
+    function addRow(value = '', gender = 'M') {
       const row = document.createElement('div');
       row.className = 'student-row';
+
       const input = document.createElement('input');
       input.type = 'text';
       input.value = value;
       input.placeholder = 'Student name...';
       input.addEventListener('input', updateCount);
+
+      const genderSelect = document.createElement('select');
+      genderSelect.innerHTML = '<option value="M">M</option><option value="F">F</option>';
+      genderSelect.value = gender;
 
       const removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -211,27 +233,32 @@
       });
 
       row.appendChild(input);
+      row.appendChild(genderSelect);
       row.appendChild(removeBtn);
       studentRows.appendChild(row);
 
       if (!value) input.focus();
     }
 
-    function getStudentNames() {
-      return Array.from(studentRows.querySelectorAll('input'))
-        .map(input => input.value.trim())
-        .filter(name => name.length > 0);
+    function getStudentData() {
+      const rows = studentRows.querySelectorAll('.student-row');
+      return Array.from(rows)
+        .map(row => ({
+          name: row.querySelector('input').value.trim(),
+          gender: row.querySelector('select').value
+        }))
+        .filter(s => s.name.length > 0);
     }
 
     function updateCount() {
-      const names = getStudentNames();
-      studentCount.textContent = `${names.length} student${names.length !== 1 ? 's' : ''}`;
+      const data = getStudentData();
+      studentCount.textContent = `${data.length} student${data.length !== 1 ? 's' : ''}`;
     }
 
     addBtn.addEventListener('click', () => addRow());
 
     saveBtn.addEventListener('click', async () => {
-      const students = getStudentNames();
+      const students = getStudentData();
       saveBtn.disabled = true;
       statusMsg.textContent = '';
 
@@ -259,8 +286,9 @@
     // Allow Enter in last input to add new row
     studentRows.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
-        const inputs = studentRows.querySelectorAll('input');
-        if (e.target === inputs[inputs.length - 1]) {
+        const rows = studentRows.querySelectorAll('.student-row');
+        const lastRow = rows[rows.length - 1];
+        if (e.target === lastRow.querySelector('input')) {
           addRow();
         }
       }

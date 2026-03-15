@@ -49,7 +49,9 @@ function escapeHtml(str) {
 async function init() {
   try {
     const response = await fetch('/api/students');
-    students = await response.json();
+    const data = await response.json();
+    // Support both old format (strings) and new format (objects with name/gender)
+    students = data.map(s => typeof s === 'string' ? s : s.name);
   } catch (e) {
     console.error('Failed to load students:', e);
   }
