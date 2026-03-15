@@ -307,6 +307,7 @@ CRITICAL LENGTH CONSTRAINT: You must write concisely. The play must fit within t
 Rewrite the play to fit within ${maxWordCount} words. Rules:
 - Keep the same characters, actors, and casting (do not change who plays whom)
 - Keep the playbill at the top
+- EVERY line of dialogue MUST show both character name AND student name, e.g. **MOSES (Olin H):** — never drop the student name
 - Preserve the best jokes and the key story beats
 - Cut or shorten long monologues, redundant dialogue, and unnecessary scenes
 - Combine scenes where possible
