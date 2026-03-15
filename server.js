@@ -205,11 +205,22 @@ app.post('/api/generate', async (req, res) => {
     const history = await loadRoleHistory();
     const { prioritized } = analyzeRoleHistory(history, students);
 
-    const priorityNote = prioritized.length > 0
-      ? ` Prioritize giving roles to these students who haven't had roles recently: ${prioritized.join(', ')}.`
-      : '';
+    // Shuffle students randomly using Fisher-Yates, with prioritized students first
+    const shuffled = [...students];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    // Move prioritized students to the front so they get roles first
+    if (prioritized.length > 0) {
+      const prioritySet = new Set(prioritized);
+      const front = shuffled.filter(s => prioritySet.has(s));
+      const rest = shuffled.filter(s => !prioritySet.has(s));
+      shuffled.length = 0;
+      shuffled.push(...front, ...rest);
+    }
 
-    const listOfNames = students.join(', ');
+    const numberedNames = shuffled.map((name, i) => `${i + 1}. ${name}`).join('\n');
     const selectedGenre = 'adventure';
     const playDuration = duration || '20';
 
@@ -221,7 +232,9 @@ app.post('/api/generate', async (req, res) => {
 
 The actors will be reading the play while seated. All action will need to be described by a narrator or in the characters dialogue.
 
-Choose characters from the story and assign them to actors. The narrator will also be assigned from the list of actors. No name will be assigned to more than one part. The list of actors is: ${listOfNames}${priorityNote}
+Assign characters to actors in EXACTLY the numbered order below. Actor #1 gets the first role you create, actor #2 gets the second role, and so on. The narrator counts as a role. No name will be assigned to more than one part. Do not skip or reorder actors.
+
+${numberedNames}
 
 The story is from ${title || 'the following scripture passage'}: ${scripture}
 
