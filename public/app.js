@@ -176,6 +176,18 @@ function startTimer() {
   timerInterval = setInterval(() => {
     seconds++;
     loadingTime.textContent = `Elapsed: ${formatTime(seconds)}`;
+
+    if (seconds === 5) {
+      loadingStatus.textContent = 'Reading the scripture...';
+    } else if (seconds === 15) {
+      loadingStatus.textContent = 'Writing the play...';
+    } else if (seconds === 45) {
+      loadingStatus.textContent = 'Still writing...';
+    } else if (seconds === 90) {
+      loadingStatus.textContent = 'Checking length and trimming if needed...';
+    } else if (seconds === 150) {
+      loadingStatus.textContent = 'Taking longer than usual, but still working...';
+    }
   }, 1000);
 }
 
@@ -220,40 +232,40 @@ async function generatePlay() {
       })
     });
 
-    if (!response.ok && response.headers.get('content-type')?.includes('application/json')) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to generate play');
+    // Read response — supports both streaming (line-by-line) and buffered (Replit proxy)
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      // Try to parse error from response
+      try {
+        const err = JSON.parse(responseText);
+        throw new Error(err.error || 'Failed to generate play');
+      } catch (e) {
+        if (e.message && !e.message.includes('JSON')) throw e;
+        throw new Error('Failed to generate play');
+      }
     }
 
-    // Read streaming response line by line
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+    // Parse newline-delimited JSON events from response
+    const lines = responseText.split('\n').filter(l => l.trim());
     let resultData = null;
+    let lastError = null;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete line in buffer
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const event = JSON.parse(line);
-          if (event.type === 'status') {
-            loadingStatus.textContent = event.detail;
-          } else if (event.type === 'error') {
-            throw new Error(event.error);
-          } else if (event.type === 'result') {
-            resultData = event;
-          }
-        } catch (e) {
-          if (e.message && !e.message.includes('JSON')) throw e;
+    for (const line of lines) {
+      try {
+        const event = JSON.parse(line);
+        if (event.type === 'error') {
+          lastError = event.error;
+        } else if (event.type === 'result') {
+          resultData = event;
         }
+      } catch (e) {
+        // Skip unparseable lines
       }
+    }
+
+    if (lastError && !resultData) {
+      throw new Error(lastError);
     }
 
     if (!resultData) {
