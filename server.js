@@ -247,7 +247,7 @@ Here is the play to condense:
 ${playText}`;
 
       const condenseResponse = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 8000,
         system: 'You are an expert script editor. Your job is to tighten plays to a target word count while preserving their humor, story, and character assignments. Return ONLY the condensed play with no commentary.',
         messages: [
