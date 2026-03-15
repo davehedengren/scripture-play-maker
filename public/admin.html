@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - Scripture Play Maker</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .admin-container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+    .admin-container header {
+      margin-bottom: 32px;
+    }
+    .admin-container header p {
+      text-align: center;
+      color: var(--text-secondary);
+      margin-top: 8px;
+      font-size: 15px;
+    }
+    .student-editor {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      box-shadow: var(--shadow-soft);
+    }
+    .student-editor h2 {
+      font-size: 21px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .student-editor p.help-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+    .student-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .student-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .student-row input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid var(--mid-gray);
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-family: inherit;
+      transition: var(--transition);
+      background: var(--white);
+    }
+    .student-row input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+    }
+    .remove-btn {
+      padding: 10px 14px;
+      background: var(--light-gray);
+      color: var(--dark-gray);
+      border-radius: var(--radius);
+      font-size: 16px;
+      line-height: 1;
+    }
+    .remove-btn:hover {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+    .admin-actions {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .add-btn {
+      padding: 12px 24px;
+      background: var(--light-gray);
+      color: var(--text-primary);
+      border-radius: 980px;
+      font-size: 14px;
+    }
+    .add-btn:hover {
+      background: var(--mid-gray);
+    }
+    .save-btn {
+      padding: 16px 36px;
+      background: var(--accent);
+      color: var(--white);
+      border-radius: 980px;
+      font-size: 17px;
+      font-weight: 500;
+      width: 100%;
+    }
+    .save-btn:hover {
+      background: var(--accent-hover);
+      transform: scale(1.01);
+    }
+    .save-btn:active {
+      transform: scale(0.99);
+    }
+    .save-btn:disabled {
+      background: var(--mid-gray);
+      cursor: not-allowed;
+      transform: none;
+    }
+    .status-msg {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 15px;
+      font-weight: 500;
+      min-height: 24px;
+    }
+    .status-msg.success { color: #16a34a; }
+    .status-msg.error { color: #dc2626; }
+    .back-link {
+      display: inline-block;
+      margin-top: 24px;
+      text-align: center;
+      width: 100%;
+      color: var(--accent);
+      font-size: 15px;
+      text-decoration: none;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+    .student-count {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <header>
+      <h1>Scripture Play Maker</h1>
+      <p>Admin - Manage Student Roster</p>
+    </header>
+
+    <div class="student-editor">
+      <h2>Students</h2>
+      <p class="help-text">Add, remove, or rename students. Changes take effect immediately for new plays.</p>
+      <p class="student-count" id="student-count"></p>
+
+      <div class="student-rows" id="student-rows">
+        <!-- Populated by JS -->
+      </div>
+
+      <div class="admin-actions">
+        <button type="button" class="add-btn" id="add-btn">+ Add Student</button>
+      </div>
+
+      <button type="button" class="save-btn" id="save-btn">Save Changes</button>
+      <p class="status-msg" id="status-msg"></p>
+    </div>
+
+    <a href="/" class="back-link">Back to Play Maker</a>
+  </div>
+
+  <script>
+    const studentRows = document.getElementById('student-rows');
+    const addBtn = document.getElementById('add-btn');
+    const saveBtn = document.getElementById('save-btn');
+    const statusMsg = document.getElementById('status-msg');
+    const studentCount = document.getElementById('student-count');
+
+    let originalStudents = [];
+
+    async function loadStudents() {
+      try {
+        const response = await fetch('/api/students');
+        const students = await response.json();
+        originalStudents = [...students];
+        renderRows(students);
+      } catch (error) {
+        statusMsg.textContent = 'Failed to load students';
+        statusMsg.className = 'status-msg error';
+      }
+    }
+
+    function renderRows(students) {
+      studentRows.innerHTML = '';
+      students.forEach((name, i) => addRow(name));
+      updateCount();
+    }
+
+    function addRow(value = '') {
+      const row = document.createElement('div');
+      row.className = 'student-row';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = value;
+      input.placeholder = 'Student name...';
+      input.addEventListener('input', updateCount);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'remove-btn';
+      removeBtn.innerHTML = '&#x2715;';
+      removeBtn.addEventListener('click', () => {
+        row.remove();
+        updateCount();
+      });
+
+      row.appendChild(input);
+      row.appendChild(removeBtn);
+      studentRows.appendChild(row);
+
+      if (!value) input.focus();
+    }
+
+    function getStudentNames() {
+      return Array.from(studentRows.querySelectorAll('input'))
+        .map(input => input.value.trim())
+        .filter(name => name.length > 0);
+    }
+
+    function updateCount() {
+      const names = getStudentNames();
+      studentCount.textContent = `${names.length} student${names.length !== 1 ? 's' : ''}`;
+    }
+
+    addBtn.addEventListener('click', () => addRow());
+
+    saveBtn.addEventListener('click', async () => {
+      const students = getStudentNames();
+      saveBtn.disabled = true;
+      statusMsg.textContent = '';
+
+      try {
+        const response = await fetch('/api/students', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ students })
+        });
+
+        if (!response.ok) throw new Error('Save failed');
+
+        const saved = await response.json();
+        originalStudents = [...saved];
+        statusMsg.textContent = `Saved ${saved.length} students`;
+        statusMsg.className = 'status-msg success';
+      } catch (error) {
+        statusMsg.textContent = 'Failed to save. Please try again.';
+        statusMsg.className = 'status-msg error';
+      } finally {
+        saveBtn.disabled = false;
+      }
+    });
+
+    // Allow Enter in last input to add new row
+    studentRows.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && e.target.tagName === 'INPUT') {
+        const inputs = studentRows.querySelectorAll('input');
+        if (e.target === inputs[inputs.length - 1]) {
+          addRow();
+        }
+      }
+    });
+
+    loadStudents();
+  </script>
+</body>
+</html>
