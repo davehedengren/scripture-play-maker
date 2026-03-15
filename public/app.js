@@ -1,12 +1,4 @@
-// Default student list
-const DEFAULT_STUDENTS = [
-  'Adrian H', 'Alex R', 'Andreas P', 'Bella F', 'Blake B', 'Charles G',
-  'Cooper A', 'Ellie S', 'Emelia S', 'Emma H', 'Jacob F', 'Joel R',
-  'Katelyn S', 'Lila R', 'Macy H', 'McKay S', 'Naomi S', 'Nico C',
-  'Olin H', 'Olivia P', 'Rebekah M', 'Ryder D', 'Sam P', 'Spencer C', 'Trent W'
-];
-
-let students = [...DEFAULT_STUDENTS];
+let students = [];
 let visitors = [];
 
 // DOM Elements
@@ -54,7 +46,13 @@ function escapeHtml(str) {
 }
 
 // Initialize
-function init() {
+async function init() {
+  try {
+    const response = await fetch('/api/students');
+    students = await response.json();
+  } catch (e) {
+    console.error('Failed to load students:', e);
+  }
   renderStudentList();
   loadSavedState();
   setupEventListeners();

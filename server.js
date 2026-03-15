@@ -30,6 +30,7 @@ const pool = new pg.Pool({
 });
 
 const ROLE_HISTORY_PATH = path.join(__dirname, 'data', 'role-history.json');
+const STUDENTS_PATH = path.join(__dirname, 'data', 'students.json');
 const MAX_HISTORY_ENTRIES = 10;
 
 app.use(express.json());
@@ -54,6 +55,20 @@ async function initDatabase() {
   } finally {
     client.release();
   }
+}
+
+async function loadStudents() {
+  try {
+    const data = await fs.readFile(STUDENTS_PATH, 'utf-8');
+    return JSON.parse(data);
+  } catch {
+    return [];
+  }
+}
+
+async function saveStudents(students) {
+  await fs.mkdir(path.dirname(STUDENTS_PATH), { recursive: true });
+  await fs.writeFile(STUDENTS_PATH, JSON.stringify(students, null, 2));
 }
 
 async function loadRoleHistory() {
@@ -95,6 +110,33 @@ app.get('/api/role-history', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to load role history' });
   }
+});
+
+app.get('/api/students', async (req, res) => {
+  try {
+    const students = await loadStudents();
+    res.json(students);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load students' });
+  }
+});
+
+app.put('/api/students', async (req, res) => {
+  try {
+    const { students } = req.body;
+    if (!Array.isArray(students)) {
+      return res.status(400).json({ error: 'Students must be an array' });
+    }
+    const cleaned = students.map(s => s.trim()).filter(s => s.length > 0);
+    await saveStudents(cleaned);
+    res.json(cleaned);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save students' });
+  }
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 app.get('/api/scripts', async (req, res) => {
