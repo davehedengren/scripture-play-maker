@@ -610,7 +610,6 @@ async function loadTemplateLibrary() {
       const date = new Date(t.date);
       const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       const roleCount = Array.isArray(t.roles) ? t.roles.length : 0;
-      const femaleCount = Array.isArray(t.roles) ? t.roles.filter(r => r.gender === 'F').length : 0;
       return `
         <div class="library-card">
           <div class="library-card-content" data-id="${escapeHtml(t.id)}">
@@ -618,7 +617,7 @@ async function loadTemplateLibrary() {
             <div class="library-meta">
               <span>${dateStr}</span>
               <span>${escapeHtml(String(t.duration))} min</span>
-              <span>${roleCount} roles${femaleCount > 0 ? ` (${femaleCount} female)` : ''}</span>
+              <span>${roleCount} roles</span>
             </div>
           </div>
           <button class="library-delete-btn" data-delete-id="${escapeHtml(t.id)}" title="Delete template">&#x2715;</button>
@@ -661,16 +660,13 @@ async function openTemplateForCasting(id) {
 
   castTemplateTitle.textContent = selectedTemplate.title;
   const roles = selectedTemplate.roles || [];
-  const femaleCount = roles.filter(r => r.gender === 'F').length;
   castTemplateMeta.innerHTML = `
     <span>${roles.length} roles</span>
-    <span>${femaleCount} female-only</span>
     <span>${escapeHtml(String(selectedTemplate.duration))} min</span>
   `;
   castTemplateRoles.innerHTML = roles.map(r => `
     <div class="template-role-item">
       <span class="role-name">${escapeHtml(r.name)}</span>
-      <span class="role-tag ${r.gender === 'F' ? 'female' : ''}">${r.gender === 'F' ? 'Female' : 'Anyone'}</span>
     </div>
   `).join('');
 
