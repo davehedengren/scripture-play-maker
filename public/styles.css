@@ -252,6 +252,47 @@ button {
   color: var(--accent);
 }
 
+/* Paste Roster */
+.paste-roster {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.paste-roster textarea {
+  flex: 1;
+  min-height: 56px;
+  max-height: 140px;
+  padding: 10px 14px;
+  border: 1px solid var(--mid-gray);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  resize: vertical;
+  background: var(--white);
+  transition: var(--transition);
+}
+
+.paste-roster textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
+}
+
+.paste-roster button {
+  padding: 0 20px;
+  background: var(--text-primary);
+  color: var(--white);
+  border-radius: var(--radius);
+  align-self: stretch;
+  white-space: nowrap;
+}
+
+.paste-roster button:hover {
+  background: var(--text-secondary);
+}
+
 /* Add Visitor */
 .add-visitor {
   display: flex;
@@ -565,6 +606,149 @@ body.fullscreen .play-display h1 {
 
 body.fullscreen .play-display h2 {
   font-size: 32px;
+}
+
+/* Single-column input section (used for Pre-make Play) */
+.input-section.single-col {
+  grid-template-columns: 1fr;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.panel-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: -16px;
+  margin-bottom: 20px;
+}
+
+/* Library list */
+.library-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.library-card {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--light-gray);
+  transition: var(--transition);
+}
+
+.library-card:last-child {
+  border-bottom: none;
+}
+
+.library-card:hover {
+  background: var(--off-white);
+}
+
+.library-card-content {
+  flex: 1;
+  padding: 20px 24px;
+  cursor: pointer;
+}
+
+.library-card-content h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.library-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.library-delete-btn {
+  padding: 8px 16px;
+  margin-right: 16px;
+  background: none;
+  color: var(--dark-gray);
+  font-size: 16px;
+  border-radius: 8px;
+}
+
+.library-delete-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Template details panel (cast tab) */
+.template-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+.template-roles {
+  background: var(--off-white);
+  border-radius: var(--radius);
+  padding: 16px;
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+.template-role-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+
+.template-role-item .role-name {
+  font-weight: 500;
+}
+
+.template-role-item .role-tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 980px;
+  background: var(--mid-gray);
+  color: var(--text-secondary);
+}
+
+.template-role-item .role-tag.female {
+  background: #fce7f3;
+  color: #be185d;
+}
+
+.cast-controls {
+  display: flex;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.cast-controls #cast-back-btn {
+  padding: 14px 24px;
+  background: var(--light-gray);
+  color: var(--text-primary);
+  border-radius: 980px;
+}
+
+.cast-controls #cast-back-btn:hover {
+  background: var(--mid-gray);
+}
+
+.cast-controls #cast-go-btn {
+  flex: 1;
+  margin-top: 0;
+}
+
+.cast-warnings {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+  font-size: 14px;
 }
 
 /* Responsive */

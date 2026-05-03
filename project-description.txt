@@ -1,0 +1,51 @@
+We want to make a website that can make fun plays like the one i have here. 
+
+the basic prompt is in the .py script here: write-a-play-from-scripture.py
+
+we want to set this up to run on replit so it can
+
+1. get a list of which students are in the class today.
+2. get a scripture reference
+3. pull the scripture text from the kjv of the bible, the doctrine and convenants, the book of mormon, or the pearl of great price.
+4. pass the scripture and the students to an llm to get back a script in markdown
+5. render the script in a viewer that gives a cast list, and the text in a format that is easy to read on a 55 inch tv in a class room. the script should put the students name next to the character's name on every line.
+6. it should keep track of which students have been cast recently to give roles to people who haven't had them recently
+
+Class List
+should have this list with easy check boxes to mark who is there. we should have a text box to add more students who are visiting.
+
+Olin Paul Hedengren
+Macy Heyman
+Jacob William Fillmore
+Adrian Hudson
+Emma Hudson
+Katelyn Swenson
+
+Alex Russ
+
+Charles Groesbeck
+Bella Fillmore
+
+Ryder Davis
+Trent Weed
+Sam Prince
+Joel Kirby Ransom
+Naomi Salazar
+McKay Smith
+
+Nico Clark
+Andreas Prokhorov
+Rebekah Jane Morrison
+Ellie Swenson
+Olivia Payne
+Blake Matthew Baker
+Emelia Salazar
+Cooper Christen Allen
+Spencer Mark Calvin
+Lila Rees
+
+
+
+any questions?
+
+

@@ -14,6 +14,8 @@
 
     <nav class="tab-nav" id="tab-nav">
       <button class="tab-btn active" data-tab="create">Create New</button>
+      <button class="tab-btn" data-tab="templates">Pre-make Play</button>
+      <button class="tab-btn" data-tab="library">Cast Pre-made</button>
       <button class="tab-btn" data-tab="history">Past Scripts</button>
     </nav>
 
@@ -24,6 +26,10 @@
           <div class="button-group">
             <button type="button" id="select-all">Select All</button>
             <button type="button" id="clear-all">Clear All</button>
+          </div>
+          <div class="paste-roster">
+            <textarea id="paste-roster" placeholder="Paste today's roster (one name per line)..."></textarea>
+            <button type="button" id="paste-roster-apply">Apply</button>
           </div>
           <div class="student-list" id="student-list">
             <!-- Students populated by JS -->
@@ -80,6 +86,96 @@
             <p class="history-empty">No scripts yet. Generate your first play to see it here.</p>
           </div>
         </div>
+      </section>
+
+      <section class="input-section single-col" id="templates-input-section" style="display: none;">
+        <div class="panel scripture-panel">
+          <h2>Pre-make a Play</h2>
+          <p class="panel-subtitle">Generate a reusable play template. Cast students later from the Cast Pre-made tab.</p>
+          <input type="text" id="tpl-title" placeholder="Title/Reference (e.g., 'Moses and the Burning Bush - Exodus 3')">
+          <textarea id="tpl-scripture" placeholder="Paste the scripture text here..."></textarea>
+          <div class="options-row">
+            <div class="option-group">
+              <label for="tpl-duration">Duration:</label>
+              <select id="tpl-duration">
+                <option value="5">5 min</option>
+                <option value="10">10 min</option>
+                <option value="15">15 min</option>
+                <option value="20" selected>20 min</option>
+              </select>
+            </div>
+            <div class="option-group">
+              <label for="tpl-cast-size">Cast size:</label>
+              <select id="tpl-cast-size">
+                <option value="8">~8 roles</option>
+                <option value="12">~12 roles</option>
+                <option value="15" selected>~15 roles</option>
+                <option value="20">~20 roles</option>
+                <option value="25">~25 roles</option>
+              </select>
+            </div>
+            <div class="option-group">
+              <label for="tpl-model">Model:</label>
+              <select id="tpl-model">
+                <option value="claude-opus-4-6" selected>Claude Opus 4.6</option>
+                <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-5.2-2025-12-11">GPT-5.2</option>
+              </select>
+            </div>
+          </div>
+          <button type="button" id="tpl-generate-btn" class="generate-btn">Generate Template</button>
+        </div>
+      </section>
+
+      <section class="library-section" id="library-section" style="display: none;">
+        <div class="panel">
+          <h2>Pre-made Plays</h2>
+          <p class="panel-subtitle">Pick a template, then choose today's roster to cast it.</p>
+          <div class="library-list" id="library-list">
+            <p class="history-empty">No templates yet. Pre-make one from the Pre-make Play tab.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="input-section" id="library-cast-section" style="display: none;">
+        <div class="panel students-panel">
+          <h2>Who's here today?</h2>
+          <div class="button-group">
+            <button type="button" id="cast-select-all">Select All</button>
+            <button type="button" id="cast-clear-all">Clear All</button>
+          </div>
+          <div class="paste-roster">
+            <textarea id="cast-paste-roster" placeholder="Paste today's roster (one name per line)..."></textarea>
+            <button type="button" id="cast-paste-roster-apply">Apply</button>
+          </div>
+          <div class="student-list" id="cast-student-list"></div>
+          <div class="add-visitor">
+            <input type="text" id="cast-visitor-name" placeholder="Add visiting student...">
+            <button type="button" id="cast-add-visitor">Add</button>
+          </div>
+        </div>
+
+        <div class="panel scripture-panel">
+          <h2 id="cast-template-title">Template</h2>
+          <div id="cast-template-meta" class="template-meta"></div>
+          <div id="cast-template-roles" class="template-roles"></div>
+          <div class="cast-controls">
+            <button type="button" id="cast-back-btn">← Back to library</button>
+            <button type="button" id="cast-go-btn" class="generate-btn">Cast Roles</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="output-section" id="cast-output-section" style="display: none;">
+        <div class="output-controls">
+          <button type="button" id="cast-output-back-btn">Back</button>
+          <button type="button" id="cast-output-download-btn">Save Script</button>
+          <button type="button" id="cast-output-fullscreen-btn">Present</button>
+        </div>
+        <div id="cast-warnings" class="cast-warnings" style="display: none;"></div>
+        <div class="play-display" id="cast-play-display"></div>
       </section>
 
       <section class="output-section" id="history-view-section" style="display: none;">

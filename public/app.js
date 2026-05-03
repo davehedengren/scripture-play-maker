@@ -1,5 +1,7 @@
 let students = [];
+let studentsWithGender = [];
 let visitors = [];
+let castVisitors = [];
 
 // DOM Elements
 const studentList = document.getElementById('student-list');
@@ -32,6 +34,40 @@ const historyFullscreenBtn = document.getElementById('history-fullscreen-btn');
 const tabNav = document.getElementById('tab-nav');
 const tabBtns = tabNav.querySelectorAll('.tab-btn');
 
+// Templates (pre-make) tab
+const templatesInputSection = document.getElementById('templates-input-section');
+const tplTitle = document.getElementById('tpl-title');
+const tplScripture = document.getElementById('tpl-scripture');
+const tplDuration = document.getElementById('tpl-duration');
+const tplCastSize = document.getElementById('tpl-cast-size');
+const tplModel = document.getElementById('tpl-model');
+const tplGenerateBtn = document.getElementById('tpl-generate-btn');
+
+// Library tab
+const librarySection = document.getElementById('library-section');
+const libraryList = document.getElementById('library-list');
+const libraryCastSection = document.getElementById('library-cast-section');
+const castStudentList = document.getElementById('cast-student-list');
+const castSelectAllBtn = document.getElementById('cast-select-all');
+const castClearAllBtn = document.getElementById('cast-clear-all');
+const castVisitorInput = document.getElementById('cast-visitor-name');
+const castAddVisitorBtn = document.getElementById('cast-add-visitor');
+const castTemplateTitle = document.getElementById('cast-template-title');
+const castTemplateMeta = document.getElementById('cast-template-meta');
+const castTemplateRoles = document.getElementById('cast-template-roles');
+const castBackBtn = document.getElementById('cast-back-btn');
+const castGoBtn = document.getElementById('cast-go-btn');
+const castOutputSection = document.getElementById('cast-output-section');
+const castWarnings = document.getElementById('cast-warnings');
+const castPlayDisplay = document.getElementById('cast-play-display');
+const castOutputBackBtn = document.getElementById('cast-output-back-btn');
+const castOutputDownloadBtn = document.getElementById('cast-output-download-btn');
+const castOutputFullscreenBtn = document.getElementById('cast-output-fullscreen-btn');
+
+let selectedTemplate = null;
+let currentCastMarkdown = '';
+let currentCastTitle = '';
+
 let timerInterval = null;
 let currentMarkdown = '';
 let currentTitle = '';
@@ -51,13 +87,27 @@ async function init() {
     const response = await fetch('/api/students');
     const data = await response.json();
     // Support both old format (strings) and new format (objects with name/gender)
-    students = data.map(s => typeof s === 'string' ? s : s.name);
+    studentsWithGender = data.map(s =>
+      typeof s === 'string' ? { name: s, gender: 'M' } : { name: s.name, gender: s.gender || 'M' }
+    );
+    students = studentsWithGender.map(s => s.name);
   } catch (e) {
     console.error('Failed to load students:', e);
   }
   renderStudentList();
   loadSavedState();
   setupEventListeners();
+
+  window.addEventListener('hashchange', applyHashRoute);
+  applyHashRoute();
+}
+
+const VALID_TABS = ['create', 'templates', 'library', 'history'];
+
+function applyHashRoute() {
+  const hash = (window.location.hash || '').replace(/^#/, '');
+  const tab = VALID_TABS.includes(hash) ? hash : 'create';
+  switchTab(tab, { updateHash: false });
 }
 
 function renderStudentList() {
@@ -86,6 +136,30 @@ function renderStudentList() {
   });
 }
 
+function applyRosterPaste(text, listEl, opts = {}) {
+  const { addUnmatchedAsVisitors, rerender, onChange } = opts;
+  const pasted = text.split('\n').map(s => s.trim()).filter(Boolean);
+  const pastedSet = new Set(pasted.map(n => n.toLowerCase()));
+
+  if (addUnmatchedAsVisitors) {
+    const knownNames = new Set();
+    listEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      knownNames.add(cb.value.toLowerCase());
+    });
+    const unknown = pasted.filter(n => !knownNames.has(n.toLowerCase()));
+    if (unknown.length > 0) {
+      addUnmatchedAsVisitors(unknown);
+      if (rerender) rerender();
+    }
+  }
+
+  listEl.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.checked = pastedSet.has(cb.value.toLowerCase());
+  });
+
+  if (onChange) onChange();
+}
+
 function setupEventListeners() {
   selectAllBtn.addEventListener('click', () => {
     studentList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
@@ -95,6 +169,33 @@ function setupEventListeners() {
   clearAllBtn.addEventListener('click', () => {
     studentList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
     saveState();
+  });
+
+  const pasteRosterEl = document.getElementById('paste-roster');
+  const pasteRosterApply = document.getElementById('paste-roster-apply');
+  pasteRosterApply.addEventListener('click', () => {
+    applyRosterPaste(pasteRosterEl.value, studentList, {
+      addUnmatchedAsVisitors: (names) => {
+        names.forEach(n => { if (!visitors.includes(n)) visitors.push(n); });
+      },
+      rerender: renderStudentList,
+      onChange: saveState
+    });
+  });
+
+  const castPasteRosterEl = document.getElementById('cast-paste-roster');
+  const castPasteRosterApply = document.getElementById('cast-paste-roster-apply');
+  castPasteRosterApply.addEventListener('click', () => {
+    applyRosterPaste(castPasteRosterEl.value, castStudentList, {
+      addUnmatchedAsVisitors: (names) => {
+        names.forEach(n => {
+          if (!castVisitors.find(v => v.name === n)) {
+            castVisitors.push({ name: n, gender: 'M' });
+          }
+        });
+      },
+      rerender: renderCastStudentList
+    });
   });
 
   addVisitorBtn.addEventListener('click', addVisitor);
@@ -109,6 +210,47 @@ function setupEventListeners() {
 
   tabBtns.forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  tplGenerateBtn.addEventListener('click', generateTemplate);
+
+  castSelectAllBtn.addEventListener('click', () => {
+    castStudentList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+  });
+  castClearAllBtn.addEventListener('click', () => {
+    castStudentList.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+  });
+  castAddVisitorBtn.addEventListener('click', addCastVisitor);
+  castVisitorInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') addCastVisitor();
+  });
+  castBackBtn.addEventListener('click', () => switchTab('library'));
+  castGoBtn.addEventListener('click', castSelectedTemplate);
+
+  castOutputBackBtn.addEventListener('click', () => {
+    castOutputSection.style.display = 'none';
+    libraryCastSection.style.display = 'grid';
+    document.body.classList.remove('fullscreen');
+    castOutputFullscreenBtn.textContent = 'Present';
+  });
+  castOutputDownloadBtn.addEventListener('click', () => {
+    if (!currentCastMarkdown) return;
+    const filename = currentCastTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.md';
+    const blob = new Blob([currentCastMarkdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+  castOutputFullscreenBtn.addEventListener('click', () => {
+    document.body.classList.toggle('fullscreen');
+    castOutputFullscreenBtn.textContent = document.body.classList.contains('fullscreen')
+      ? 'Exit Fullscreen'
+      : 'Present';
   });
 
   historyBackBtn.addEventListener('click', () => {
@@ -349,7 +491,8 @@ function loadSavedState() {
   }
 }
 
-function switchTab(tab) {
+function switchTab(tab, opts = {}) {
+  const updateHash = opts.updateHash !== false;
   currentTab = tab;
   tabBtns.forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === tab);
@@ -357,15 +500,268 @@ function switchTab(tab) {
 
   inputSection.style.display = 'none';
   outputSection.style.display = 'none';
+  templatesInputSection.style.display = 'none';
+  librarySection.style.display = 'none';
+  libraryCastSection.style.display = 'none';
+  castOutputSection.style.display = 'none';
   historySection.style.display = 'none';
   historyViewSection.style.display = 'none';
   document.body.classList.remove('fullscreen');
 
   if (tab === 'create') {
     inputSection.style.display = 'grid';
+  } else if (tab === 'templates') {
+    templatesInputSection.style.display = 'grid';
+  } else if (tab === 'library') {
+    librarySection.style.display = 'block';
+    loadTemplateLibrary();
   } else if (tab === 'history') {
     historySection.style.display = 'block';
     loadScriptHistory();
+  }
+
+  if (updateHash) {
+    const targetHash = '#' + tab;
+    if (window.location.hash !== targetHash) {
+      history.replaceState(null, '', targetHash);
+    }
+  }
+}
+
+// ===== Templates (pre-make) =====
+
+async function generateTemplate() {
+  const title = tplTitle.value.trim();
+  const scripture = tplScripture.value.trim();
+  const duration = tplDuration.value;
+  const targetCastSize = tplCastSize.value;
+  const model = tplModel.value;
+
+  if (!scripture) {
+    alert('Please enter scripture text');
+    return;
+  }
+
+  loading.style.display = 'flex';
+  tplGenerateBtn.disabled = true;
+  startTimer();
+
+  try {
+    const response = await fetch('/api/templates/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, scripture, duration, model, targetCastSize })
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let resultData = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          if (event.type === 'status') {
+            loadingStatus.textContent = event.detail;
+          } else if (event.type === 'error') {
+            throw new Error(event.error);
+          } else if (event.type === 'result') {
+            resultData = event;
+          }
+        } catch (e) {
+          if (e.message && !e.message.includes('JSON')) throw e;
+        }
+      }
+    }
+
+    if (!resultData) throw new Error('No result received from server');
+
+    alert(`Template saved with ${resultData.roles.length} roles. Switching to library.`);
+    switchTab('library');
+  } catch (error) {
+    alert('Error: ' + error.message);
+  } finally {
+    stopTimer();
+    loading.style.display = 'none';
+    tplGenerateBtn.disabled = false;
+  }
+}
+
+// ===== Library (cast pre-made) =====
+
+async function loadTemplateLibrary() {
+  try {
+    const response = await fetch('/api/templates');
+    const templates = await response.json();
+
+    if (!templates.length) {
+      libraryList.innerHTML = '<p class="history-empty">No templates yet. Pre-make one from the Pre-make Play tab.</p>';
+      return;
+    }
+
+    libraryList.innerHTML = templates.map(t => {
+      const date = new Date(t.date);
+      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const roleCount = Array.isArray(t.roles) ? t.roles.length : 0;
+      const femaleCount = Array.isArray(t.roles) ? t.roles.filter(r => r.gender === 'F').length : 0;
+      return `
+        <div class="library-card">
+          <div class="library-card-content" data-id="${escapeHtml(t.id)}">
+            <h3>${escapeHtml(t.title)}</h3>
+            <div class="library-meta">
+              <span>${dateStr}</span>
+              <span>${escapeHtml(String(t.duration))} min</span>
+              <span>${roleCount} roles${femaleCount > 0 ? ` (${femaleCount} female)` : ''}</span>
+            </div>
+          </div>
+          <button class="library-delete-btn" data-delete-id="${escapeHtml(t.id)}" title="Delete template">&#x2715;</button>
+        </div>
+      `;
+    }).join('');
+
+    libraryList.querySelectorAll('.library-card-content').forEach(el => {
+      el.addEventListener('click', () => openTemplateForCasting(el.dataset.id));
+    });
+    libraryList.querySelectorAll('.library-delete-btn').forEach(el => {
+      el.addEventListener('click', (e) => deleteTemplate(el.dataset.deleteId, e));
+    });
+  } catch (error) {
+    libraryList.innerHTML = '<p class="history-empty">Failed to load templates.</p>';
+  }
+}
+
+async function deleteTemplate(id, event) {
+  event.stopPropagation();
+  if (!confirm('Delete this template? This cannot be undone.')) return;
+  try {
+    const response = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Delete failed');
+    loadTemplateLibrary();
+  } catch (e) {
+    alert('Failed to delete template');
+  }
+}
+
+async function openTemplateForCasting(id) {
+  try {
+    const response = await fetch(`/api/templates/${id}`);
+    if (!response.ok) throw new Error('Not found');
+    selectedTemplate = await response.json();
+  } catch (e) {
+    alert('Failed to load template');
+    return;
+  }
+
+  castTemplateTitle.textContent = selectedTemplate.title;
+  const roles = selectedTemplate.roles || [];
+  const femaleCount = roles.filter(r => r.gender === 'F').length;
+  castTemplateMeta.innerHTML = `
+    <span>${roles.length} roles</span>
+    <span>${femaleCount} female-only</span>
+    <span>${escapeHtml(String(selectedTemplate.duration))} min</span>
+  `;
+  castTemplateRoles.innerHTML = roles.map(r => `
+    <div class="template-role-item">
+      <span class="role-name">${escapeHtml(r.name)}</span>
+      <span class="role-tag ${r.gender === 'F' ? 'female' : ''}">${r.gender === 'F' ? 'Female' : 'Anyone'}</span>
+    </div>
+  `).join('');
+
+  renderCastStudentList();
+
+  librarySection.style.display = 'none';
+  libraryCastSection.style.display = 'grid';
+}
+
+function renderCastStudentList() {
+  castStudentList.innerHTML = '';
+  studentsWithGender.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'student-item';
+    div.innerHTML = `
+      <input type="checkbox" id="cast-student-${s.name}" value="${escapeHtml(s.name)}" data-gender="${s.gender}">
+      <label for="cast-student-${s.name}">${escapeHtml(s.name)}</label>
+    `;
+    castStudentList.appendChild(div);
+  });
+  castVisitors.forEach(v => {
+    const div = document.createElement('div');
+    div.className = 'student-item visitor';
+    div.innerHTML = `
+      <input type="checkbox" id="cast-student-${v.name}" value="${escapeHtml(v.name)}" data-gender="${v.gender}" checked>
+      <label for="cast-student-${v.name}">${escapeHtml(v.name)} (${v.gender === 'F' ? 'F' : 'M'} visitor)</label>
+    `;
+    castStudentList.appendChild(div);
+  });
+}
+
+function addCastVisitor() {
+  const name = castVisitorInput.value.trim();
+  if (!name) return;
+  if (students.includes(name) || castVisitors.find(v => v.name === name)) return;
+  const isFemale = confirm(`Is ${name} female? Click OK for female, Cancel for male/other.`);
+  castVisitors.push({ name, gender: isFemale ? 'F' : 'M' });
+  renderCastStudentList();
+  castVisitorInput.value = '';
+}
+
+function getCastSelectedStudents() {
+  const checkboxes = castStudentList.querySelectorAll('input[type="checkbox"]:checked');
+  return Array.from(checkboxes).map(cb => ({
+    name: cb.value,
+    gender: cb.dataset.gender || 'M'
+  }));
+}
+
+async function castSelectedTemplate() {
+  if (!selectedTemplate) return;
+  const present = getCastSelectedStudents();
+  if (present.length === 0) {
+    alert('Pick at least one student');
+    return;
+  }
+
+  loading.style.display = 'flex';
+  loadingStatus.textContent = 'Assigning roles...';
+  castGoBtn.disabled = true;
+  startTimer();
+
+  try {
+    const response = await fetch(`/api/templates/${selectedTemplate.id}/cast`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ students: present })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'Casting failed');
+
+    currentCastMarkdown = data.markdown;
+    currentCastTitle = data.title || selectedTemplate.title;
+    castPlayDisplay.innerHTML = data.html;
+
+    if (data.warnings && data.warnings.length > 0) {
+      castWarnings.style.display = 'block';
+      castWarnings.innerHTML = data.warnings.map(w => `<div>${escapeHtml(w)}</div>`).join('');
+    } else {
+      castWarnings.style.display = 'none';
+      castWarnings.innerHTML = '';
+    }
+
+    libraryCastSection.style.display = 'none';
+    castOutputSection.style.display = 'block';
+  } catch (error) {
+    alert('Error: ' + error.message);
+  } finally {
+    stopTimer();
+    loading.style.display = 'none';
+    castGoBtn.disabled = false;
   }
 }
 
