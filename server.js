@@ -91,26 +91,45 @@ function countWords(s) {
   return s.split(/\s+/).filter(w => w.length > 0).length;
 }
 
-// Parse role definitions from a template's cast list.
-// Expected line format: "- **ROLE NAME** (F): description" or "- **ROLE NAME**: description"
+function normalizeRoleName(raw) {
+  return raw.trim().replace(/[:.\s\-—–]+$/, '').trim();
+}
+
+// Parse role definitions from a template. Lenient about whether the LLM put the
+// colon inside or outside the bold markers, and whether it used a leading dash.
 function parseTemplateRoles(markdown) {
   const roles = [];
   const seen = new Set();
-  const castLineRegex = /^-\s*\*\*([^*]+?)\*\*\s*(?:\(([^)]+)\))?/gm;
+
+  // Pass 1: roles with explicit (F) or (M) gender tag — handles cast list lines.
+  const taggedRegex = /^(?:-\s*)?\*\*([^*\n]+?):?\*\*\s*\(([FfMm])\)/gm;
   let m;
-  while ((m = castLineRegex.exec(markdown)) !== null) {
-    const name = m[1].trim();
-    const tag = (m[2] || '').toUpperCase().trim();
+  while ((m = taggedRegex.exec(markdown)) !== null) {
+    const name = normalizeRoleName(m[1]);
+    const tag = m[2].toUpperCase();
+    if (!name || name.includes('(')) continue;
     if (!seen.has(name)) {
       seen.add(name);
       roles.push({ name, gender: tag === 'F' ? 'F' : 'ANY' });
     }
   }
 
+  // Pass 2: every other speaking role found at the start of a line.
+  const anyRoleRegex = /^(?:-\s*)?\*\*([^*\n]+?):?\*\*/gm;
+  while ((m = anyRoleRegex.exec(markdown)) !== null) {
+    const name = normalizeRoleName(m[1]);
+    if (!name || name.includes('(')) continue;
+    if (!seen.has(name)) {
+      seen.add(name);
+      roles.push({ name, gender: 'ANY' });
+    }
+  }
+
+  // Word counts per role (count from dialogue lines only — those have content after).
   const wordCounts = {};
-  const dialogueRegex = /^\*\*([^*]+?)(?:\s*\([^)]*\))?:\*\*\s*(.+)$/gm;
+  const dialogueRegex = /^(?:-\s*)?\*\*([^*\n]+?)(?:\s*\([^)]*\))?:?\*\*:?\s*(.+)$/gm;
   while ((m = dialogueRegex.exec(markdown)) !== null) {
-    const name = m[1].trim();
+    const name = normalizeRoleName(m[1]);
     wordCounts[name] = (wordCounts[name] || 0) + countWords(m[2]);
   }
 
@@ -160,51 +179,64 @@ async function recordCastingEvents({ scriptId, templateId, casting, wordsByRole 
   );
 }
 
-// Deterministic-ish casting: female-only roles to female students first (biggest role to
-// lowest-lifetime-words student); remaining roles to remaining students likewise.
+// Casting: every role gets an actor. Students with fewer lifetime words and
+// fewer roles in this play get priority for the biggest remaining role.
+// Students may be assigned multiple roles when there are more roles than students.
 function castRoles(roles, presentStudents, lifetimeWords) {
   const warnings = [];
-  const priority = (s) =>
-    (lifetimeWords[s.name] || 0) + Math.random() * 0.5; // small random tiebreak
-
-  const sortedStudents = [...presentStudents].sort((a, b) => priority(a) - priority(b));
 
   const femaleRoles = roles.filter(r => r.gender === 'F').sort((a, b) => b.wordCount - a.wordCount);
   const anyRoles = roles.filter(r => r.gender !== 'F').sort((a, b) => b.wordCount - a.wordCount);
+  const femaleStudents = presentStudents.filter(s => s.gender === 'F');
 
-  const femaleStudents = sortedStudents.filter(s => s.gender === 'F');
-
-  if (femaleStudents.length < femaleRoles.length) {
-    return {
-      error: `This template needs ${femaleRoles.length} female actor(s) but only ${femaleStudents.length} present.`
-    };
+  if (femaleStudents.length === 0 && femaleRoles.length > 0) {
+    return { error: `This template has ${femaleRoles.length} female-only role(s) but no female actors are present.` };
   }
 
   const casting = {};
-  const used = new Set();
+  const rolesPerStudent = {};
+  presentStudents.forEach(s => { rolesPerStudent[s.name] = 0; });
 
-  femaleRoles.forEach((role, i) => {
-    casting[role.name] = femaleStudents[i].name;
-    used.add(femaleStudents[i].name);
-  });
-
-  const remaining = sortedStudents.filter(s => !used.has(s.name));
-  const n = Math.min(remaining.length, anyRoles.length);
-  for (let i = 0; i < n; i++) {
-    casting[anyRoles[i].name] = remaining[i].name;
+  function pickStudent(eligible) {
+    return [...eligible].sort((a, b) => {
+      const ra = rolesPerStudent[a.name] || 0;
+      const rb = rolesPerStudent[b.name] || 0;
+      if (ra !== rb) return ra - rb;
+      const wa = (lifetimeWords[a.name] || 0) + Math.random() * 0.5;
+      const wb = (lifetimeWords[b.name] || 0) + Math.random() * 0.5;
+      return wa - wb;
+    })[0];
   }
 
-  if (remaining.length > anyRoles.length) {
-    const leftover = remaining.slice(anyRoles.length).map(s => s.name);
-    warnings.push(`No role for: ${leftover.join(', ')}. Template has fewer roles than students.`);
-  } else if (anyRoles.length > remaining.length) {
-    const uncast = anyRoles.slice(remaining.length).map(r => r.name);
-    warnings.push(`No actor for: ${uncast.join(', ')}. Template has more roles than students.`);
+  for (const role of femaleRoles) {
+    const student = pickStudent(femaleStudents);
+    casting[role.name] = student.name;
+    rolesPerStudent[student.name] = (rolesPerStudent[student.name] || 0) + 1;
+  }
+
+  for (const role of anyRoles) {
+    const student = pickStudent(presentStudents);
+    casting[role.name] = student.name;
+    rolesPerStudent[student.name] = (rolesPerStudent[student.name] || 0) + 1;
+  }
+
+  const unused = presentStudents.filter(s => rolesPerStudent[s.name] === 0).map(s => s.name);
+  if (unused.length > 0) {
+    warnings.push(`No role for: ${unused.join(', ')}. Template has fewer roles than students.`);
+  }
+
+  const doubled = presentStudents
+    .filter(s => rolesPerStudent[s.name] > 1)
+    .map(s => `${s.name} (${rolesPerStudent[s.name]} roles)`);
+  if (doubled.length > 0) {
+    warnings.push(`Doubling up: ${doubled.join(', ')}`);
   }
 
   return { casting, warnings };
 }
 
+// Rewrite every line whose header matches a known role to "**ROLE (Student):**".
+// Tolerates **ROLE**, **ROLE:**, **ROLE**:, optional leading "- ", optional (F)/(M) tag.
 function applyCastingToMarkdown(markdown, casting) {
   let out = markdown;
   const roleNames = Object.keys(casting).sort((a, b) => b.length - a.length);
@@ -212,12 +244,8 @@ function applyCastingToMarkdown(markdown, casting) {
     const student = casting[role];
     const escaped = role.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     out = out.replace(
-      new RegExp(`\\*\\*${escaped}:\\*\\*`, 'g'),
-      `**${role} (${student}):**`
-    );
-    out = out.replace(
-      new RegExp(`-\\s*\\*\\*${escaped}\\*\\*(\\s*\\([^)]*\\))?`, 'g'),
-      `- **${role} (${student})**`
+      new RegExp(`^(-\\s*)?\\*\\*${escaped}:?\\*\\*(?::|(?:\\s+\\([^)]+\\)\\s*:?))?`, 'gm'),
+      (_match, dash) => `${dash || ''}**${role} (${student}):**`
     );
   }
   return out;
@@ -605,6 +633,7 @@ REQUIRED FORMAT (follow exactly):
    - **ROLE NAME** (F): brief description
    - **ROLE NAME**: brief description
    The "(F)" tag means the role MUST be played by a female actor (e.g., Mary, Eve, Miriam, Esther). Roles without "(F)" can be played by any actor regardless of gender. Use "(F)" ONLY for roles that are explicitly female in the scripture.
+   CRITICAL: the colon MUST go OUTSIDE the closing asterisks. Write \`**MOSES**:\` — never \`**MOSES:**\` — in the cast list.
 
 2. After the cast list, write the play. EVERY line of dialogue MUST start with **ROLE NAME:** followed by the line. Example:
    **MOSES:** Let my people go!
@@ -783,7 +812,11 @@ app.post('/api/templates/:id/cast', async (req, res) => {
     });
 
     const lifetimeWords = await getLifetimeWordsByStudent();
-    const result = castRoles(template.roles, presentWithGender, lifetimeWords);
+    const cleanedRoles = (template.roles || []).map(r => ({
+      ...r,
+      name: normalizeRoleName(r.name || '')
+    })).filter(r => r.name);
+    const result = castRoles(cleanedRoles, presentWithGender, lifetimeWords);
 
     if (result.error) {
       return res.status(400).json({ error: result.error });
@@ -794,7 +827,7 @@ app.post('/api/templates/:id/cast', async (req, res) => {
     const castHtml = marked(castMarkdown);
 
     const wordsByRole = {};
-    template.roles.forEach(r => { wordsByRole[r.name] = r.wordCount || 0; });
+    cleanedRoles.forEach(r => { wordsByRole[r.name] = r.wordCount || 0; });
 
     const scriptId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
     const studentNames = presentWithGender.map(s => s.name);
